@@ -163,6 +163,7 @@ static int send_file(gm_sess *s, const char *root, const char *path,
         free(header);
         return -1;
     }
+
     uint64_t file_size = (uint64_t)sz;
     memcpy(header, &path_len, 2);
     memcpy(header + 2, path, path_len);

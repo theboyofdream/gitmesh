@@ -152,6 +152,7 @@ gm_sess *gm_connect(const char *ip, uint16_t port) {
     gm_ident id;
     if (gm_ident_load(&id) != 0) gm_die("identity load failed");
     gm_sock_init();
+
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) gm_die("socket: %s", strerror(errno));
     struct sockaddr_in addr = {0};

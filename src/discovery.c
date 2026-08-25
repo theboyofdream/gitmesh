@@ -93,6 +93,7 @@ int gm_disco_collect(const gm_ident *id, gm_peer *out, int max, int ms) {
 
     int64_t deadline = gm_now_ms() + ms;
     int n_peers = 0;
+
     while (gm_now_ms() < deadline && n_peers < max) {
         uint8_t buf[PKT_LEN];
         struct sockaddr_in sender_addr = {0};

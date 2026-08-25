@@ -117,14 +117,17 @@ int gm_write_file_atomic(const char *root, const char *rel, const uint8_t *data,
     ensure_parents(final_path);
     if (snprintf(tmp_path, sizeof tmp_path, "%s.tmp%lx", final_path, (unsigned long)getpid()) >= (int)sizeof tmp_path)
         return -1;
+
     int fd = open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, 0644);
     if (fd < 0) return -1;
+
     size_t offset = 0;
     while (offset < n) {
         ssize_t bytes_written = write(fd, data + offset, n - offset);
         if (bytes_written <= 0) { close(fd); unlink(tmp_path); return -1; }
         offset += (size_t)bytes_written;
     }
+
     if (close(fd) != 0 || rename(tmp_path, final_path) != 0) {
         unlink(tmp_path);
         return -1;

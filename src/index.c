@@ -138,9 +138,11 @@ int gm_index_load(const char *root, gm_manifest *manifest) {
     size_t n = 0;
     if (gm_read_file(path, &data, &n) != 0) return -1;
     if (n < 4) { free(data); return -1; }
+
     uint32_t count;
     memcpy(&count, data, 4);
     size_t offset = 4;
+
     for (uint32_t i = 0; i < count && offset + 2 <= n; i++) {
         uint16_t path_len;
         memcpy(&path_len, data + offset, 2);
