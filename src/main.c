@@ -18,12 +18,12 @@ static int cmd_peers(void) {
     }
     printf("\n");
     for (int i = 0; i < n; i++) {
-        char fp[9];
-        gm_hex(fp, peers[i].sign_pk + 24, 4);
-        char ipport[64];
-        uint16_t p = peers[i].port ? peers[i].port : gm_env_tcp_port();
-        snprintf(ipport, sizeof ipport, "%s:%u", peers[i].ip, p);
-        printf("  %c %-20s %-21s ~%s\n", '*', peers[i].name, ipport, fp);
+        char fingerprint[9];
+        gm_hex(fingerprint, peers[i].sign_pk + 24, 4);
+        char ip_port[64];
+        uint16_t tcp_port = peers[i].port ? peers[i].port : gm_env_tcp_port();
+        snprintf(ip_port, sizeof ip_port, "%s:%u", peers[i].ip, tcp_port);
+        printf("  %c %-20s %-21s ~%s\n", '*', peers[i].name, ip_port, fingerprint);
     }
     return 0;
 }
@@ -32,26 +32,29 @@ static int cmd_status(void) {
     gm_sock_init();
     gm_ident id;
     gm_ident_load(&id);
-    char pkhex[crypto_sign_PUBLICKEYBYTES * 2 + 1];
-    gm_hex(pkhex, id.sign_pk, crypto_sign_PUBLICKEYBYTES);
+    char key_hex[crypto_sign_PUBLICKEYBYTES * 2 + 1];
+    gm_hex(key_hex, id.sign_pk, crypto_sign_PUBLICKEYBYTES);
     char root[GM_PATH_MAX];
     if (!getcwd(root, sizeof root)) gm_die("cannot determine working directory");
-    char display[GM_NAME_MAX];
-    gm_ident_display(&id, display);
+    char display_name[GM_NAME_MAX];
+    gm_ident_display(&id, display_name);
     printf("gitmesh %s\n", GM_VERSION);
     printf("user:     %s\n", id.user);
     printf("device:   %s\n", id.device);
-    printf("display:  %s\n", display);
-    printf("identity: %.16s...\n", pkhex);
+    printf("display:  %s\n", display_name);
+    printf("identity: %.16s...\n", key_hex);
     printf("project:  %s\n", root);
 
-    gm_manifest old = {0}, cur = {0};
+    gm_manifest old = {0};
+    gm_manifest cur = {0};
     int have_index = gm_index_load(root, &old) == 0;
     gm_scan(root, &old, &cur);
     printf("indexed:  %s (%zu files)\n", have_index ? "yes" : "no", old.n);
     printf("current:  %zu files\n", cur.n);
     if (have_index) {
-        size_t added = 0, modified = 0, deleted = 0;
+        size_t added = 0;
+        size_t modified = 0;
+        size_t deleted = 0;
         gm_diff(&old, &cur, &added, &modified, &deleted);
         printf("pending:  %zu changed / %zu added / %zu deleted\n",
                modified, added, deleted);

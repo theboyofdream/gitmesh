@@ -33,24 +33,25 @@ static void load_name_file(const char *rel, char *out) {
 }
 
 int gm_ident_load(gm_ident *id) {
-    char dir[GM_PATH_MAX], file[GM_PATH_MAX];
-    if (gm_home_path(dir, sizeof dir, "") != 0) gm_die("cannot find HOME");
-    mkdirs(dir);
-    if (gm_home_path(file, sizeof file, "identity") != 0) return -1;
+    char dir_path[GM_PATH_MAX];
+    char file_path[GM_PATH_MAX];
+    if (gm_home_path(dir_path, sizeof dir_path, "") != 0) gm_die("cannot find HOME");
+    mkdirs(dir_path);
+    if (gm_home_path(file_path, sizeof file_path, "identity") != 0) return -1;
 
     uint8_t seed[crypto_sign_SEEDBYTES];
-    char hexbuf[crypto_sign_SEEDBYTES * 2 + 1];
+    char seed_hex[crypto_sign_SEEDBYTES * 2 + 1];
 
     uint8_t *data = NULL;
     size_t n = 0;
-    if (gm_read_file(file, &data, &n) != 0 ||
+    if (gm_read_file(file_path, &data, &n) != 0 ||
         gm_unhex(seed, sizeof seed, (const char *)data) != 0) {
         randombytes_buf(seed, sizeof seed);
-        FILE *f = fopen(file, "wb");
-        if (!f) gm_die("cannot write %s", file);
-        gm_hex(hexbuf, seed, sizeof seed);
-        fputs(hexbuf, f);
-        fclose(f);
+        FILE *file = fopen(file_path, "wb");
+        if (!file) gm_die("cannot write %s", file_path);
+        gm_hex(seed_hex, seed, sizeof seed);
+        fputs(seed_hex, file);
+        fclose(file);
     }
     free(data);
 
@@ -77,10 +78,10 @@ int gm_ident_set_user(const char *name) {
     for (const char *p = name; *p; p++) if (*p == '\n' || *p == '\r') return -1;
     char path[GM_PATH_MAX];
     if (gm_home_path(path, sizeof path, "user") != 0) return -1;
-    FILE *f = fopen(path, "wb");
-    if (!f) return -1;
-    fprintf(f, "%s\n", name);
-    fclose(f);
+    FILE *file = fopen(path, "wb");
+    if (!file) return -1;
+    fprintf(file, "%s\n", name);
+    fclose(file);
     return 0;
 }
 
@@ -89,32 +90,33 @@ int gm_ident_set_device(const char *name) {
     for (const char *p = name; *p; p++) if (*p == '\n' || *p == '\r') return -1;
     char path[GM_PATH_MAX];
     if (gm_home_path(path, sizeof path, "device") != 0) return -1;
-    FILE *f = fopen(path, "wb");
-    if (!f) return -1;
-    fprintf(f, "%s\n", name);
-    fclose(f);
+    FILE *file = fopen(path, "wb");
+    if (!file) return -1;
+    fprintf(file, "%s\n", name);
+    fclose(file);
     return 0;
 }
 
 int gm_ident_export(char *out, size_t n) {
-    gm_ident id;
-    if (gm_ident_load(&id) != 0) return -1;
+    gm_ident identity;
+    if (gm_ident_load(&identity) != 0) return -1;
     if (n < crypto_sign_SEEDBYTES * 2 + 1) return -1;
-    gm_hex(out, id.seed, crypto_sign_SEEDBYTES);
+    gm_hex(out, identity.seed, crypto_sign_SEEDBYTES);
     return 0;
 }
 
 int gm_ident_import(const char *hex) {
     uint8_t seed[crypto_sign_SEEDBYTES];
     if (!hex || gm_unhex(seed, sizeof seed, hex) != 0) return -1;
-    char path[GM_PATH_MAX], hexbuf[crypto_sign_SEEDBYTES * 2 + 1];
+    char path[GM_PATH_MAX];
+    char seed_hex[crypto_sign_SEEDBYTES * 2 + 1];
     if (gm_home_path(path, sizeof path, "identity") != 0) return -1;
-    for (char *p = path + 1; *p; p++) if (*p == '/') { *p = 0; mkdir(path, 0755); *p = '/'; }
-    FILE *f = fopen(path, "wb");
-    if (!f) return -1;
-    gm_hex(hexbuf, seed, sizeof seed);
-    fputs(hexbuf, f);
-    fclose(f);
+    for (char *cursor = path + 1; *cursor; cursor++) if (*cursor == '/') { *cursor = 0; mkdir(path, 0755); *cursor = '/'; }
+    FILE *file = fopen(path, "wb");
+    if (!file) return -1;
+    gm_hex(seed_hex, seed, sizeof seed);
+    fputs(seed_hex, file);
+    fclose(file);
     return 0;
 }
 
@@ -129,8 +131,8 @@ bool gm_known_check(const uint8_t *peer_pk) {
     uint8_t *data = NULL;
     size_t n = 0;
     if (gm_read_file(path, &data, &n) != 0) return false;
-    char want[crypto_sign_PUBLICKEYBYTES * 2 + 1];
-    gm_hex(want, peer_pk, crypto_sign_PUBLICKEYBYTES);
+    char wanted_hex[crypto_sign_PUBLICKEYBYTES * 2 + 1];
+    gm_hex(wanted_hex, peer_pk, crypto_sign_PUBLICKEYBYTES);
     bool found = false;
     char *line = (char *)data;
     for (size_t i = 0; i <= n && !found; i++) {
@@ -138,7 +140,7 @@ bool gm_known_check(const uint8_t *peer_pk) {
             size_t len = (size_t)(data + i - (uint8_t *)line);
             while (len && line[len - 1] == '\r') len--;
             if (len >= crypto_sign_PUBLICKEYBYTES * 2 &&
-                memcmp(line, want, crypto_sign_PUBLICKEYBYTES * 2) == 0)
+                memcmp(line, wanted_hex, crypto_sign_PUBLICKEYBYTES * 2) == 0)
                 found = true;
             line = (char *)data + i + 1;
         }
@@ -154,10 +156,10 @@ void gm_known_pin(const gm_ident *me, const uint8_t *peer_pk, const char *name) 
     if (!path[0] || gm_known_check(peer_pk)) return;
     char pkhex[crypto_sign_PUBLICKEYBYTES * 2 + 1];
     gm_hex(pkhex, peer_pk, crypto_sign_PUBLICKEYBYTES);
-    FILE *f = fopen(path, "a");
-    if (!f) return;
-    fprintf(f, "%s %s\n", pkhex, name ? name : "?");
-    fclose(f);
+    FILE *file = fopen(path, "a");
+    if (!file) return;
+    fprintf(file, "%s %s\n", pkhex, name ? name : "?");
+    fclose(file);
     fprintf(stderr, "gitmesh: pinned new peer %s (%s)\n", name ? name : "?", pkhex + 56);
 }
 
@@ -168,8 +170,8 @@ char *gm_known_name(const uint8_t *peer_pk) {
     uint8_t *data = NULL;
     size_t n = 0;
     if (gm_read_file(path, &data, &n) != 0) return NULL;
-    char want[crypto_sign_PUBLICKEYBYTES * 2 + 1];
-    gm_hex(want, peer_pk, crypto_sign_PUBLICKEYBYTES);
+    char wanted_hex[crypto_sign_PUBLICKEYBYTES * 2 + 1];
+    gm_hex(wanted_hex, peer_pk, crypto_sign_PUBLICKEYBYTES);
     char *found = NULL;
     char *line = (char *)data;
     for (size_t i = 0; i <= n && !found; i++) {
@@ -177,7 +179,7 @@ char *gm_known_name(const uint8_t *peer_pk) {
             size_t len = (size_t)(data + i - (uint8_t *)line);
             while (len && (line[len - 1] == '\r' || line[len - 1] == ' ')) len--;
             if (len > crypto_sign_PUBLICKEYBYTES * 2 + 1 &&
-                memcmp(line, want, crypto_sign_PUBLICKEYBYTES * 2) == 0 &&
+                memcmp(line, wanted_hex, crypto_sign_PUBLICKEYBYTES * 2) == 0 &&
                 line[crypto_sign_PUBLICKEYBYTES * 2] == ' ') {
                 found = gm_xstrdup(line + crypto_sign_PUBLICKEYBYTES * 2 + 1);
                 found[len - crypto_sign_PUBLICKEYBYTES * 2 - 1] = 0;

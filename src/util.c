@@ -16,21 +16,21 @@ void gm_die(const char *fmt, ...) {
 }
 
 void *gm_xmalloc(size_t n) {
-    void *p = malloc(n ? n : 1);
-    if (!p) gm_die("out of memory");
-    return p;
+    void *ptr = malloc(n ? n : 1);
+    if (!ptr) gm_die("out of memory");
+    return ptr;
 }
 
 void *gm_xrealloc(void *p, size_t n) {
-    void *q = realloc(p, n ? n : 1);
-    if (!q) gm_die("out of memory");
-    return q;
+    void *resized = realloc(p, n ? n : 1);
+    if (!resized) gm_die("out of memory");
+    return resized;
 }
 
 char *gm_xstrdup(const char *s) {
-    char *d = strdup(s);
-    if (!d) gm_die("out of memory");
-    return d;
+    char *copy = strdup(s);
+    if (!copy) gm_die("out of memory");
+    return copy;
 }
 
 static const char HEXD[] = "0123456789abcdef";
@@ -53,22 +53,22 @@ static int hexval(char c) {
 int gm_unhex(uint8_t *out, size_t outn, const char *in) {
     if (strlen(in) != outn * 2) return -1;
     for (size_t i = 0; i < outn; i++) {
-        int hi = hexval(in[i * 2]), lo = hexval(in[i * 2 + 1]);
-        if (hi < 0 || lo < 0) return -1;
-        out[i] = (uint8_t)(hi << 4 | lo);
+        int high_nibble = hexval(in[i * 2]), low_nibble = hexval(in[i * 2 + 1]);
+        if (high_nibble < 0 || low_nibble < 0) return -1;
+        out[i] = (uint8_t)(high_nibble << 4 | low_nibble);
     }
     return 0;
 }
 
 int gm_home_path(char *buf, size_t n, const char *rel) {
-    const char *home = getenv("HOME");
+    const char *home_dir = getenv("HOME");
 #ifdef _WIN32
-    if (!home || !*home) home = getenv("USERPROFILE");
+    if (!home_dir || !*home_dir) home_dir = getenv("USERPROFILE");
 #endif
-    if (!home || !*home) return -1;
+    if (!home_dir || !*home_dir) return -1;
     if (!rel) rel = "";
-    int r = snprintf(buf, n, "%s/.gitmesh%s%s", home, *rel ? "/" : "", rel);
-    return r >= 0 && (size_t)r < n ? 0 : -1;
+    int printed = snprintf(buf, n, "%s/.gitmesh%s%s", home_dir, *rel ? "/" : "", rel);
+    return printed >= 0 && (size_t)printed < n ? 0 : -1;
 }
 
 void gm_gethostname(char *buf, size_t n) {
@@ -83,34 +83,35 @@ int64_t gm_now_ms(void) {
 }
 
 int gm_read_file(const char *path, uint8_t **out, size_t *outn) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return -1;
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz < 0) { fclose(f); return -1; }
-    uint8_t *buf = gm_xmalloc((size_t)sz + 1);
-    size_t rd = fread(buf, 1, (size_t)sz, f);
-    fclose(f);
-    if (rd != (size_t)sz) { free(buf); return -1; }
-    buf[sz] = 0;
+    FILE *file = fopen(path, "rb");
+    if (!file) return -1;
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (file_size < 0) { fclose(file); return -1; }
+    uint8_t *buf = gm_xmalloc((size_t)file_size + 1);
+    size_t bytes_read = fread(buf, 1, (size_t)file_size, file);
+    fclose(file);
+    if (bytes_read != (size_t)file_size) { free(buf); return -1; }
+    buf[file_size] = 0;
     *out = buf;
-    *outn = (size_t)sz;
+    *outn = (size_t)file_size;
     return 0;
 }
 
 static void ensure_parents(char *path) {
-    for (char *p = path + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
+    for (char *cursor = path + 1; *cursor; cursor++) {
+        if (*cursor == '/') {
+            *cursor = 0;
             mkdir(path, 0755);
-            *p = '/';
+            *cursor = '/';
         }
     }
 }
 
 int gm_write_file_atomic(const char *root, const char *rel, const uint8_t *data, size_t n) {
-    char final_path[GM_PATH_MAX], tmp_path[GM_PATH_MAX];
+    char final_path[GM_PATH_MAX];
+    char tmp_path[GM_PATH_MAX];
     if (snprintf(final_path, sizeof final_path, "%s/%s", root, rel) >= (int)sizeof final_path)
         return -1;
     ensure_parents(final_path);
@@ -118,11 +119,11 @@ int gm_write_file_atomic(const char *root, const char *rel, const uint8_t *data,
         return -1;
     int fd = open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, 0644);
     if (fd < 0) return -1;
-    size_t off = 0;
-    while (off < n) {
-        ssize_t w = write(fd, data + off, n - off);
-        if (w <= 0) { close(fd); unlink(tmp_path); return -1; }
-        off += (size_t)w;
+    size_t offset = 0;
+    while (offset < n) {
+        ssize_t bytes_written = write(fd, data + offset, n - offset);
+        if (bytes_written <= 0) { close(fd); unlink(tmp_path); return -1; }
+        offset += (size_t)bytes_written;
     }
     if (close(fd) != 0 || rename(tmp_path, final_path) != 0) {
         unlink(tmp_path);

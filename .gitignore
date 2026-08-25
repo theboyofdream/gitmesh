@@ -1,3 +1,5 @@
 gitmesh
 *.o
 .gitmesh/
+.cache/
+index.plist

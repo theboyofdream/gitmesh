@@ -54,7 +54,8 @@ typedef struct {
 
 typedef struct {
     gm_entry *v;
-    size_t n, cap;
+    size_t n;
+    size_t cap;
 } gm_manifest;
 
 enum {

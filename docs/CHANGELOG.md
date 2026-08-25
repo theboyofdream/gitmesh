@@ -26,3 +26,10 @@ All notable changes. Format loosely based on Keep a Changelog.
  - `GITMESH_TCP_PORT` respected, direct `ip:port` peer bypasses broadcast
 
 [0.1.0]: https://github.com/example/gitmesh/releases/tag/v0.1.0
+
+## [Unreleased]
+
+### Changed
+- Internal readability refactor: descriptive local variable names across all sources (no behavior change); one variable declaration per line; `gm_scan()` call fix in sync.c caught during refactor.
+- Ignore `.cache/`, `index.plist`; quote paths in compile_commands.json.
+- Add `.clangd` (disable misc-include-cleaner: platform.h is intentional portability layer).

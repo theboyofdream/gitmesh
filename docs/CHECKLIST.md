@@ -53,3 +53,4 @@
 - [x] Builds clean on macOS (clang, -Wall -Wextra)
 - [ ] CI for Linux/Windows builds
 - [x] End-to-end loopback test (push + pull round-trip)
+- [x] Readability pass: renamed cryptic locals (pt/ct/plen/rc...), split multi-declarations, builds clean, e2e test passes

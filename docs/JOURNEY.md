@@ -36,3 +36,4 @@ Two instances on loopback (different HOME dirs → distinct identities, differen
 ## Open items
 - mDNS (Avahi/Bonjour) behind a flag someday.
 - Windows: winsock compat path written, needs real CI run.
+- Readability refactor for non-C readers: consistent local naming (plaintext/ciphertext/path_len/result...), one declaration per line. Compiler caught two dropped `gm_scan` args from automated rename — fixed. Decided: struct fields + wire names stay (`sign_pk`, `kx_pk`) since they mirror protocol; only locals renamed. `.clangd` disables misc-include-cleaner because platform.h is a deliberate portability shim.
