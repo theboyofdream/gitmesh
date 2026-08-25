@@ -1,8 +1,8 @@
 #include "gitmesh.h"
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 static void mkdirs(char *path) {
     for (char *p = path + 1; *p; p++) {

@@ -14,15 +14,17 @@ C11 + libsodium + LZ4. Single binary. No Git dependency, no server, no GUI.
 
 ## Layout
 ```
-src/gitmesh.h   shared types/constants
-src/util.c      helpers, hex, file IO
-src/ident.c     device keypair (~/.gitmesh/identity), known-peers TOFU
-src/disco.c     UDP broadcast announce/probe (discovery)
-src/index.c     project scan, BLAKE2b hashes, manifest diff (.gitmesh/index)
-src/proto.c     TCP session: X25519 kx, secretstream enc, mutual Ed25519 auth
-src/sync.c      push/pull flows + server-side session handler
-src/main.c      CLI dispatch
-docs/           PRD, CHECKLIST, JOURNEY, CHANGELOG (keep updated)
+src/gitmesh.h            shared types/constants
+src/util.c               helpers, hex, file IO
+src/ident.c              device keypair (~/.gitmesh/identity), known-peers TOFU
+src/disco.c              UDP broadcast announce/probe (discovery)
+src/index.c              project scan, BLAKE2b hashes, manifest diff (.gitmesh/index)
+src/proto.c              TCP session: X25519 kx, secretstream enc, mutual Ed25519 auth
+src/sync.c               push/pull flows + server-side session handler
+src/main.c               CLI dispatch
+src/platform/            platform dispatch header
+src/platforms/{darwin,linux,win32}/  per-OS shims (mtime, sockets)
+docs/                    PRD, CHECKLIST, JOURNEY, CHANGELOG (keep updated)
 ```
 
 ## Build / test

@@ -56,6 +56,7 @@ enum {
     GM_FILE_DATA = 10,
     GM_DONE = 11,
     GM_ERR = 12,
+    GM_MANIFEST = 13,
 };
 
 void gm_die(const char *fmt, ...);
@@ -88,6 +89,7 @@ void gm_diff(const gm_manifest *old, const gm_manifest *cur, size_t *added, size
 
 typedef struct gm_sess gm_sess;
 
+int gm_listen(void);
 gm_sess *gm_connect(const char *ip, uint16_t port);
 gm_sess *gm_serve(int fd);
 const char *gm_sess_peer_name(gm_sess *s);

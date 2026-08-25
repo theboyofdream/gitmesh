@@ -1,12 +1,10 @@
 #include "gitmesh.h"
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
 
 void gm_die(const char *fmt, ...) {
     va_list ap;
