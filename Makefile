@@ -16,11 +16,11 @@ else ifeq ($(OS),Windows_NT)
 else
   PLATFORM := linux
 endif
-CFLAGS += -Isrc/common -Isrc/platform -Isrc/platforms/$(PLATFORM)
+CFLAGS += -Isrc/common -Isrc -Isrc/platforms/$(PLATFORM)
 
-SRC := src/util.c src/ident.c src/disco.c src/index.c src/proto.c src/sync.c src/main.c
+SRC := src/util.c src/identity.c src/discovery.c src/index.c src/proto.c src/sync.c src/main.c
 
-gitmesh: $(SRC) src/common/gitmesh.h src/platform/platform.h
+gitmesh: $(SRC) src/common/gitmesh.h src/platform.h
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDLIBS)
 
 test: gitmesh

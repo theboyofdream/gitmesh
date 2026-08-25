@@ -27,6 +27,12 @@ util → ident → disco → index → proto → sync → main. Each compiled be
 ## Testing
 Two instances on loopback (different HOME dirs → distinct identities, different ports), push a tree, mutate it, push again, pull from other side. Verified adds/mods/deletes/conflicts + encrypted handshake failure on wrong key.
 
+## Day 1 — polish
+- Identity split: `user` (human) vs `device` (box). `~/.gitmesh/user`, `~/.gitmesh/device` separate; display `user@device`. CLI: `name`/`device` get/set, `export`/`import` for seed copy. Announce carries display; discovery resolves by user, device, or full display. Migration: legacy `~/.gitmesh/name` → user.
+- Wire fix: uncompressed chunk now carries 4-byte rawlen header consistent with `recv_files` `len==clen+5` check; `LZ4` path unchanged. `GITMESH_TCP_PORT` env override + direct `ip:port` target bypass discovery (loopback test).
+- Platform layer moved to `src/platform.h` → `src/platforms/<os>/platform.h`; `src/ident.c`→`identity.c`, `src/disco.c`→`discovery.c` for clarity; Makefile `CFLAGS -Isrc`.
+- Sub-agents ran in parallel: proto (auth reply, secretstream arity, listen port), sync (wire, TOFU pin, env), main+discovery (CLI, display).
+
 ## Open items
 - mDNS (Avahi/Bonjour) behind a flag someday.
 - Windows: winsock compat path written, needs real CI run.

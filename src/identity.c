@@ -15,8 +15,25 @@ static void mkdirs(char *path) {
     mkdir(path, 0755);
 }
 
+static void trim_nl(char *s, size_t *n) {
+    while (*n && (s[*n - 1] == '\n' || s[*n - 1] == '\r')) (*n)--;
+    s[*n] = 0;
+}
+
+static void load_name_file(const char *rel, char *out) {
+    char path[GM_PATH_MAX];
+    if (gm_home_path(path, sizeof path, rel) != 0) return;
+    uint8_t *data = NULL;
+    size_t n = 0;
+    if (gm_read_file(path, &data, &n) != 0) return;
+    if (n == 0 || n > GM_NAME_MAX) { free(data); return; }
+    trim_nl((char *)data, &n);
+    if (n > 0) snprintf(out, GM_NAME_MAX, "%s", (char *)data);
+    free(data);
+}
+
 int gm_ident_load(gm_ident *id) {
-    char dir[GM_PATH_MAX], file[GM_PATH_MAX], namefile[GM_PATH_MAX];
+    char dir[GM_PATH_MAX], file[GM_PATH_MAX];
     if (gm_home_path(dir, sizeof dir, "") != 0) gm_die("cannot find HOME");
     mkdirs(dir);
     if (gm_home_path(file, sizeof file, "identity") != 0) return -1;
@@ -27,7 +44,7 @@ int gm_ident_load(gm_ident *id) {
     uint8_t *data = NULL;
     size_t n = 0;
     if (gm_read_file(file, &data, &n) != 0 ||
-        n < sizeof seed || gm_unhex(seed, sizeof seed, (const char *)data) != 0) {
+        gm_unhex(seed, sizeof seed, (const char *)data) != 0) {
         randombytes_buf(seed, sizeof seed);
         FILE *f = fopen(file, "wb");
         if (!f) gm_die("cannot write %s", file);
@@ -43,19 +60,61 @@ int gm_ident_load(gm_ident *id) {
 
     char host[128];
     gm_gethostname(host, sizeof host);
-    snprintf(id->name, sizeof id->name, "%s", host);
-    if (gm_home_path(namefile, sizeof namefile, "name") == 0) {
-        uint8_t *nd = NULL;
-        size_t nn = 0;
-        if (gm_read_file(namefile, &nd, &nn) == 0 && nn > 0 && nn <= GM_NAME_MAX) {
-            while (nn && (nd[nn - 1] == '\n' || nd[nn - 1] == '\r')) nn--;
-            if (nn > 0) {
-                memcpy(id->name, nd, nn);
-                id->name[nn] = 0;
-            }
-        }
-        free(nd);
-    }
+    host[GM_NAME_MAX - 1] = 0;
+    snprintf(id->device, sizeof id->device, "%s", host);
+    load_name_file("device", id->device);
+
+    id->user[0] = 0;
+    load_name_file("user", id->user);
+    if (!id->user[0]) load_name_file("name", id->user);
+    if (!id->user[0]) snprintf(id->user, sizeof id->user, "%s", id->device);
+
+    return 0;
+}
+
+int gm_ident_set_user(const char *name) {
+    if (!name || !*name || strlen(name) >= GM_NAME_MAX) return -1;
+    for (const char *p = name; *p; p++) if (*p == '\n' || *p == '\r') return -1;
+    char path[GM_PATH_MAX];
+    if (gm_home_path(path, sizeof path, "user") != 0) return -1;
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    fprintf(f, "%s\n", name);
+    fclose(f);
+    return 0;
+}
+
+int gm_ident_set_device(const char *name) {
+    if (!name || !*name || strlen(name) >= GM_NAME_MAX) return -1;
+    for (const char *p = name; *p; p++) if (*p == '\n' || *p == '\r') return -1;
+    char path[GM_PATH_MAX];
+    if (gm_home_path(path, sizeof path, "device") != 0) return -1;
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    fprintf(f, "%s\n", name);
+    fclose(f);
+    return 0;
+}
+
+int gm_ident_export(char *out, size_t n) {
+    gm_ident id;
+    if (gm_ident_load(&id) != 0) return -1;
+    if (n < crypto_sign_SEEDBYTES * 2 + 1) return -1;
+    gm_hex(out, id.seed, crypto_sign_SEEDBYTES);
+    return 0;
+}
+
+int gm_ident_import(const char *hex) {
+    uint8_t seed[crypto_sign_SEEDBYTES];
+    if (!hex || gm_unhex(seed, sizeof seed, hex) != 0) return -1;
+    char path[GM_PATH_MAX], hexbuf[crypto_sign_SEEDBYTES * 2 + 1];
+    if (gm_home_path(path, sizeof path, "identity") != 0) return -1;
+    for (char *p = path + 1; *p; p++) if (*p == '/') { *p = 0; mkdir(path, 0755); *p = '/'; }
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    gm_hex(hexbuf, seed, sizeof seed);
+    fputs(hexbuf, f);
+    fclose(f);
     return 0;
 }
 

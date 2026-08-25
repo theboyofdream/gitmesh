@@ -22,7 +22,7 @@ static int udp_sock(void) {
     a.sin_addr.s_addr = htonl(INADDR_ANY);
     a.sin_port = htons(GM_DISCO_PORT);
     if (bind(fd, (struct sockaddr *)&a, sizeof a) != 0) {
-        close(fd);
+        gm_sock_close(fd);
         return -1;
     }
     struct timeval tv = {.tv_sec = 0, .tv_usec = 200 * 1000};
@@ -32,13 +32,15 @@ static int udp_sock(void) {
 
 static void build_packet(uint8_t *buf, uint8_t kind, const gm_ident *id, uint16_t tcp_port) {
     size_t off = 0;
+    char display[GM_NAME_MAX];
+    gm_ident_display(id, display);
     memcpy(buf + off, GM_MAGIC, 8);
     off += 8;
     buf[off++] = kind;
     buf[off++] = (uint8_t)(tcp_port & 0xff);
     buf[off++] = (uint8_t)(tcp_port >> 8);
     memset(buf + off, 0, GM_NAME_MAX);
-    snprintf((char *)buf + off, GM_NAME_MAX, "%s", id->name);
+    snprintf((char *)buf + off, GM_NAME_MAX, "%s", display);
     off += GM_NAME_MAX;
     memcpy(buf + off, id->sign_pk, crypto_sign_PUBLICKEYBYTES);
 }
@@ -47,7 +49,19 @@ static bool same_pk(const gm_ident *id, const uint8_t *pk) {
     return memcmp(id->sign_pk, pk, crypto_sign_PUBLICKEYBYTES) == 0;
 }
 
+uint16_t gm_env_tcp_port(void) {
+    const char *s = getenv("GITMESH_TCP_PORT");
+    if (!s || !*s) s = getenv("GITMESH_PORT");
+    if (!s || !*s) s = getenv("GM_TCP_PORT");
+    if (s && *s) {
+        long v = strtol(s, NULL, 10);
+        if (v > 0 && v < 65536) return (uint16_t)v;
+    }
+    return GM_TCP_PORT;
+}
+
 void gm_disco_run(const gm_ident *id, uint16_t tcp_port) {
+    if (tcp_port == 0) tcp_port = gm_env_tcp_port();
     int fd = udp_sock();
     if (fd < 0) gm_die("discovery: cannot bind UDP %d", GM_DISCO_PORT);
     uint8_t pkt[PKT_LEN];
@@ -58,15 +72,16 @@ void gm_disco_run(const gm_ident *id, uint16_t tcp_port) {
     bc.sin_addr.s_addr = inet_addr("255.255.255.255");
     if (sendto(fd, pkt, sizeof pkt, 0, (struct sockaddr *)&bc, sizeof bc) < 0)
         perror("gitmesh: announce");
-    close(fd);
+    gm_sock_close(fd);
 }
 
 int gm_disco_collect(const gm_ident *id, gm_peer *out, int max, int ms) {
     int fd = udp_sock();
     if (fd < 0) gm_die("discovery: cannot bind UDP %d", GM_DISCO_PORT);
 
+    uint16_t tp = gm_env_tcp_port();
     uint8_t probe[PKT_LEN];
-    build_packet(probe, PKT_PROBE, id, GM_TCP_PORT);
+    build_packet(probe, PKT_PROBE, id, tp);
     struct sockaddr_in bc = {0};
     bc.sin_family = AF_INET;
     bc.sin_port = htons(GM_DISCO_PORT);
@@ -74,7 +89,7 @@ int gm_disco_collect(const gm_ident *id, gm_peer *out, int max, int ms) {
     sendto(fd, probe, sizeof probe, 0, (struct sockaddr *)&bc, sizeof bc);
 
     uint8_t announce[PKT_LEN];
-    build_packet(announce, PKT_ANNOUNCE, id, GM_TCP_PORT);
+    build_packet(announce, PKT_ANNOUNCE, id, tp);
 
     int64_t deadline = gm_now_ms() + ms;
     int n_peers = 0;
@@ -121,7 +136,7 @@ int gm_disco_collect(const gm_ident *id, gm_peer *out, int max, int ms) {
         memcpy(p->sign_pk, pk, crypto_sign_PUBLICKEYBYTES);
         p->seen_ms = gm_now_ms();
     }
-    close(fd);
+    gm_sock_close(fd);
     return n_peers;
 }
 
@@ -129,10 +144,24 @@ int gm_disco_resolve(const gm_ident *id, const char *name, char *ip, uint16_t *p
     gm_peer peers[32];
     int n = gm_disco_collect(id, peers, 32, 1500);
     for (int i = 0; i < n; i++) {
-        if (strcasecmp(peers[i].name, name) == 0) {
+        bool match = false;
+        if (strcasecmp(peers[i].name, name) == 0) match = true;
+        else {
+            char *at = strchr(peers[i].name, '@');
+            if (at) {
+                size_t pre = (size_t)(at - peers[i].name);
+                char prefix[GM_NAME_MAX];
+                if (pre < sizeof prefix) {
+                    memcpy(prefix, peers[i].name, pre);
+                    prefix[pre] = 0;
+                    if (strcasecmp(prefix, name) == 0 || strcasecmp(at + 1, name) == 0) match = true;
+                }
+            }
+        }
+        if (match) {
             snprintf(ip, 48, "%s", peers[i].ip);
-            *port = peers[i].port ? peers[i].port : GM_TCP_PORT;
-            memcpy(pk, peers[i].sign_pk, crypto_sign_PUBLICKEYBYTES);
+            *port = peers[i].port ? peers[i].port : gm_env_tcp_port();
+            if (pk) memcpy(pk, peers[i].sign_pk, crypto_sign_PUBLICKEYBYTES);
             return 0;
         }
     }

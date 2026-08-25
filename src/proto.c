@@ -111,9 +111,11 @@ int gm_recv_msg(gm_sess *s, uint8_t *type, uint8_t **payload, uint32_t *len) {
 static int send_hello(gm_sess *s, const gm_ident *id) {
     uint8_t h[2 + GM_NAME_MAX + crypto_sign_PUBLICKEYBYTES + crypto_kx_PUBLICKEYBYTES];
     uint16_t ver = (uint16_t)GM_PROTO_VERSION;
+    char display[GM_NAME_MAX];
+    gm_ident_display(id, display);
     memcpy(h, &ver, 2);
     memset(h + 2, 0, GM_NAME_MAX);
-    snprintf((char *)h + 2, GM_NAME_MAX, "%s", id->name);
+    snprintf((char *)h + 2, GM_NAME_MAX, "%s", display);
     memcpy(h + 2 + GM_NAME_MAX, id->sign_pk, crypto_sign_PUBLICKEYBYTES);
     memcpy(h + 2 + GM_NAME_MAX + crypto_sign_PUBLICKEYBYTES, id->kx_pk,
            crypto_kx_PUBLICKEYBYTES);
@@ -147,7 +149,7 @@ static int start_crypto(gm_sess *s) {
 gm_sess *gm_connect(const char *ip, uint16_t port) {
     gm_ident id;
     if (gm_ident_load(&id) != 0) gm_die("identity load failed");
-
+    gm_sock_init();
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) gm_die("socket: %s", strerror(errno));
     struct sockaddr_in a = {0};
@@ -265,10 +267,18 @@ gm_sess *gm_serve(int fd) {
         gm_close(s);
         return NULL;
     }
+    uint8_t srv_sig[crypto_sign_BYTES];
+    crypto_sign_detached(srv_sig, NULL, transcript, sizeof transcript, id.sign_sk);
+    if (gm_send_msg(s, HP_AUTH, srv_sig, sizeof srv_sig) != 0) {
+        gm_close(s);
+        return NULL;
+    }
     return s;
 }
 
-int gm_listen(void) {
+int gm_listen(uint16_t port) {
+    gm_sock_init();
+    if (port == 0) port = GM_TCP_PORT;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return -1;
     int one = 1;
@@ -279,10 +289,10 @@ int gm_listen(void) {
     struct sockaddr_in a = {0};
     a.sin_family = AF_INET;
     a.sin_addr.s_addr = htonl(INADDR_ANY);
-    a.sin_port = htons(GM_TCP_PORT);
+    a.sin_port = htons(port);
     if (bind(fd, (struct sockaddr *)&a, sizeof a) != 0 ||
         listen(fd, 8) != 0) {
-        close(fd);
+        gm_sock_close(fd);
         return -1;
     }
     return fd;

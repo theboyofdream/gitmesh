@@ -20,7 +20,10 @@ static int cmd_peers(void) {
     for (int i = 0; i < n; i++) {
         char fp[9];
         gm_hex(fp, peers[i].sign_pk + 24, 4);
-        printf("  %c %-20s %-15s ~%s\n", '*', peers[i].name, peers[i].ip, fp);
+        char ipport[64];
+        uint16_t p = peers[i].port ? peers[i].port : gm_env_tcp_port();
+        snprintf(ipport, sizeof ipport, "%s:%u", peers[i].ip, p);
+        printf("  %c %-20s %-21s ~%s\n", '*', peers[i].name, ipport, fp);
     }
     return 0;
 }
@@ -33,9 +36,12 @@ static int cmd_status(void) {
     gm_hex(pkhex, id.sign_pk, crypto_sign_PUBLICKEYBYTES);
     char root[GM_PATH_MAX];
     if (!getcwd(root, sizeof root)) gm_die("cannot determine working directory");
-
+    char display[GM_NAME_MAX];
+    gm_ident_display(&id, display);
     printf("gitmesh %s\n", GM_VERSION);
-    printf("device:   %s\n", id.name);
+    printf("user:     %s\n", id.user);
+    printf("device:   %s\n", id.device);
+    printf("display:  %s\n", display);
     printf("identity: %.16s...\n", pkhex);
     printf("project:  %s\n", root);
 
@@ -71,7 +77,11 @@ int main(int argc, char **argv) {
                "  share            announce presence and accept transfers\n"
                "  status           show identity and project state\n"
                "  send <peer>      push project changes to peer\n"
-               "  receive <peer>   pull peer's changes into this project\n");
+               "  receive <peer>   pull peer's changes into this project\n"
+               "  name [newname]   show or set user name\n"
+               "  device [newname] show or set device name\n"
+               "  export           print hex seed for backup\n"
+               "  import <hex>     restore identity from hex seed\n");
         return argc < 2 ? 1 : 0;
     }
 
@@ -79,6 +89,46 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "peers") == 0) return cmd_peers();
     if (strcmp(cmd, "status") == 0) return cmd_status();
     if (strcmp(cmd, "share") == 0) return gm_cmd_share();
+    if (strcmp(cmd, "name") == 0) {
+        if (argc == 2) {
+            gm_ident id;
+            gm_ident_load(&id);
+            printf("%s\n", id.user);
+            return 0;
+        }
+        if (argc == 3) {
+            if (gm_ident_set_user(argv[2]) != 0) gm_die("invalid name");
+            printf("user name set to %s\n", argv[2]);
+            return 0;
+        }
+        gm_die("usage: gitmesh name [newname]");
+    }
+    if (strcmp(cmd, "device") == 0) {
+        if (argc == 2) {
+            gm_ident id;
+            gm_ident_load(&id);
+            printf("%s\n", id.device);
+            return 0;
+        }
+        if (argc == 3) {
+            if (gm_ident_set_device(argv[2]) != 0) gm_die("invalid name");
+            printf("device name set to %s\n", argv[2]);
+            return 0;
+        }
+        gm_die("usage: gitmesh device [newname]");
+    }
+    if (strcmp(cmd, "export") == 0) {
+        char out[crypto_sign_SEEDBYTES * 2 + 1];
+        if (gm_ident_export(out, sizeof out) != 0) gm_die("export failed");
+        printf("%s\n", out);
+        return 0;
+    }
+    if (strcmp(cmd, "import") == 0) {
+        if (argc < 3) gm_die("usage: gitmesh import <hex>");
+        if (gm_ident_import(argv[2]) != 0) gm_die("invalid hex");
+        printf("identity imported\n");
+        return 0;
+    }
     if ((strcmp(cmd, "send") == 0 || strcmp(cmd, "receive") == 0)) {
         if (argc < 3)
             gm_die("usage: gitmesh %s <peer>", cmd);

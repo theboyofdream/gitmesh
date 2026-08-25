@@ -5,6 +5,20 @@
 #include <string.h>
 #include <lz4.h>
 
+
+
+static bool parse_addr(const char *peer, char *ip, uint16_t *port) {
+    int a, b, c, d, p;
+    if (sscanf(peer, "%d.%d.%d.%d:%d", &a, &b, &c, &d, &p) == 5) {
+        if (a >= 0 && a < 256 && b >= 0 && b < 256 && c >= 0 && c < 256 && d >= 0 && d < 256 && p > 0 && p < 65536) {
+            snprintf(ip, 48, "%d.%d.%d.%d", a, b, c, d);
+            *port = (uint16_t)p;
+            return true;
+        }
+    }
+    return false;
+}
+
 static uint8_t *manifest_encode(const gm_manifest *m, size_t *outn) {
     size_t n = 4;
     for (size_t i = 0; i < m->n; i++)
@@ -177,10 +191,12 @@ static int send_file(gm_sess *s, const char *root, const char *path,
             memcpy(payload + 1, &clen, 4);
             memcpy(payload + 5, comp, (size_t)clen);
         } else {
-            wire = 5 + (uint32_t)chunk;
+            uint32_t rawlen = (uint32_t)chunk;
+            wire = 5 + rawlen;
             payload = gm_xmalloc(wire);
             payload[0] = 0;
-            memcpy(payload + 1, buf, chunk);
+            memcpy(payload + 1, &rawlen, 4);
+            memcpy(payload + 5, buf, chunk);
         }
         if (gm_send_msg(s, GM_FILE_DATA, payload, wire) != 0)
             rc = -1;
@@ -285,28 +301,7 @@ static int recv_files(gm_sess *s, const char *root, gm_manifest *applied) {
                                               (int)(cur_size - got));
                 if (out < 0) goto fail;
                 got += (uint64_t)out;
-    } else if (type == GM_WANT) {
-        gm_manifest old = {0}, cur = {0};
-        gm_index_load(".", &old);
-        gm_scan(".", &old, &cur);
-        uint32_t count = len / 4;
-        int rc = 0;
-        for (uint32_t i = 0; i < count && rc == 0; i++) {
-            uint32_t idx;
-            memcpy(&idx, payload + i * 4, 4);
-            if (idx >= cur.n) {
-                rc = -1;
-                break;
-            }
-            rc = send_file(s, ".", cur.v[idx].path, cur.v[idx].hash);
-        }
-        if (rc == 0)
-            gm_send_msg(s, GM_DONE, "complete", 8);
-        else
-            gm_send_msg(s, GM_ERR, "transfer failed", 15);
-        gm_manifest_free(&old);
-        gm_manifest_free(&cur);
-    } else {
+            } else {
                 if (got + clen > cur_size) goto fail;
                 memcpy(cur_data + got, payload + 5, clen);
                 got += clen;
@@ -500,6 +495,24 @@ static void serve_session(int fd) {
         uint8_t *enc = manifest_encode(&cur, &n);
         gm_send_msg(s, GM_MANIFEST, enc, (uint32_t)n);
         free(enc);
+        uint8_t wtype = 0;
+        uint8_t *wpayload = NULL;
+        uint32_t wlen = 0;
+        if (gm_recv_msg(s, &wtype, &wpayload, &wlen) == 0 && wtype == GM_WANT) {
+            uint32_t count = wlen / 4;
+            int rc = 0;
+            for (uint32_t i = 0; i < count && rc == 0; i++) {
+                uint32_t idx;
+                memcpy(&idx, wpayload + i * 4, 4);
+                if (idx >= cur.n) rc = -1;
+                else rc = send_file(s, ".", cur.v[idx].path, cur.v[idx].hash);
+            }
+            if (rc == 0) gm_send_msg(s, GM_DONE, "complete", 8);
+            else gm_send_msg(s, GM_ERR, "transfer failed", 15);
+            free(wpayload);
+        } else {
+            free(wpayload);
+        }
         gm_manifest_free(&old);
         gm_manifest_free(&cur);
     } else if (type == GM_PUSH_MANIFEST) {
@@ -548,14 +561,17 @@ int gm_cmd_share(void) {
     if (gm_sock_init() != 0) gm_die("socket init failed");
     gm_ident id;
     gm_ident_load(&id);
-    int lfd = gm_listen();
-    if (lfd < 0) gm_die("cannot listen on TCP %d", GM_TCP_PORT);
-    printf("gitmesh %s — sharing '%s'\n", GM_VERSION, id.name);
+    uint16_t tport = gm_env_tcp_port();
+    int lfd = gm_listen(tport);
+    if (lfd < 0) gm_die("cannot listen on TCP %d", tport);
+    char display[GM_NAME_MAX];
+    gm_ident_display(&id, display);
+    printf("gitmesh %s — sharing '%s'\n", GM_VERSION, display);
     int64_t last_announce = 0;
     for (;;) {
         int64_t now = gm_now_ms();
         if (now - last_announce >= 2000) {
-            gm_disco_run(&id, GM_TCP_PORT);
+            gm_disco_run(&id, tport);
             last_announce = now;
         }
         fd_set rfds;
@@ -572,6 +588,10 @@ int gm_cmd_share(void) {
 
 static void resolve_or_die(const gm_ident *id, const char *peer,
                            char *ip, uint16_t *port, uint8_t *pk) {
+    if (parse_addr(peer, ip, port)) {
+        memset(pk, 0, crypto_sign_PUBLICKEYBYTES);
+        return;
+    }
     printf("looking for %s...\n", peer);
     if (gm_disco_resolve(id, peer, ip, port, pk) != 0)
         gm_die("peer '%s' not found online", peer);
@@ -589,11 +609,12 @@ int gm_cmd_send(const char *peer) {
     gm_ident id;
     gm_ident_load(&id);
     char ip[48];
-    uint16_t port;
+    uint16_t port = gm_env_tcp_port();
     uint8_t pk[crypto_sign_PUBLICKEYBYTES];
     resolve_or_die(&id, peer, ip, &port, pk);
-    if (!gm_known_check(pk))
-        gm_known_pin(NULL, pk, peer);
+    if (pk[0] || pk[1]) {
+        if (!gm_known_check(pk)) gm_known_pin(NULL, pk, peer);
+    }
 
     char root[GM_PATH_MAX];
     project_root(root, sizeof root);
@@ -620,6 +641,10 @@ int gm_cmd_send(const char *peer) {
 
     printf("\nconnecting %s (%s:%u)\n", peer, ip, port);
     gm_sess *s = gm_connect(ip, port);
+    {
+        const uint8_t *spk = gm_sess_peer_pk(s);
+        if (!gm_known_check(spk)) gm_known_pin(NULL, spk, peer);
+    }
     size_t n = 0;
     uint8_t *enc = manifest_encode(&cur, &n);
     int rc = gm_send_msg(s, GM_PUSH_MANIFEST, enc, (uint32_t)n);
@@ -681,17 +706,22 @@ int gm_cmd_receive(const char *peer) {
     gm_ident id;
     gm_ident_load(&id);
     char ip[48];
-    uint16_t port;
+    uint16_t port = gm_env_tcp_port();
     uint8_t pk[crypto_sign_PUBLICKEYBYTES];
     resolve_or_die(&id, peer, ip, &port, pk);
-    if (!gm_known_check(pk))
-        gm_known_pin(NULL, pk, peer);
+    if (pk[0] || pk[1]) {
+        if (!gm_known_check(pk)) gm_known_pin(NULL, pk, peer);
+    }
 
     char root[GM_PATH_MAX];
     project_root(root, sizeof root);
 
     printf("\nconnecting %s (%s:%u)\n", peer, ip, port);
     gm_sess *s = gm_connect(ip, port);
+    {
+        const uint8_t *spk = gm_sess_peer_pk(s);
+        if (!gm_known_check(spk)) gm_known_pin(NULL, spk, peer);
+    }
     if (gm_send_msg(s, GM_GET_MANIFEST, "", 0) != 0) {
         gm_close(s);
         gm_die("connection lost");

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
+#include <stdio.h>
 #include <sodium.h>
 
 #define GM_VERSION       "0.1.0"
@@ -24,8 +26,16 @@ typedef struct {
     uint8_t sign_sk[crypto_sign_SECRETKEYBYTES];
     uint8_t kx_pk[crypto_kx_PUBLICKEYBYTES];
     uint8_t kx_sk[crypto_kx_SECRETKEYBYTES];
-    char name[GM_NAME_MAX];
+    char user[GM_NAME_MAX];
+    char device[GM_NAME_MAX];
 } gm_ident;
+
+static inline void gm_ident_display(const gm_ident *id, char out[GM_NAME_MAX]) {
+    if (id->user[0] && strcmp(id->user, id->device) != 0)
+        snprintf(out, GM_NAME_MAX, "%s@%s", id->user, id->device);
+    else
+        snprintf(out, GM_NAME_MAX, "%s", id->device);
+}
 
 typedef struct {
     char ip[48];
@@ -72,6 +82,10 @@ void gm_gethostname(char *buf, size_t n);
 int64_t gm_now_ms(void);
 
 int gm_ident_load(gm_ident *id);
+int gm_ident_set_user(const char *name);
+int gm_ident_set_device(const char *name);
+int gm_ident_export(char *out, size_t n);
+int gm_ident_import(const char *hex);
 void gm_known_pin(const gm_ident *me, const uint8_t *peer_pk, const char *name);
 char *gm_known_name(const uint8_t *peer_pk);
 bool gm_known_check(const uint8_t *peer_pk);
@@ -79,6 +93,7 @@ bool gm_known_check(const uint8_t *peer_pk);
 void gm_disco_run(const gm_ident *id, uint16_t tcp_port);
 int gm_disco_collect(const gm_ident *id, gm_peer *out, int max, int ms);
 int gm_disco_resolve(const gm_ident *id, const char *name, char *ip, uint16_t *port, uint8_t *pk);
+uint16_t gm_env_tcp_port(void);
 
 void gm_manifest_free(gm_manifest *m);
 void gm_manifest_sort(gm_manifest *m);
@@ -91,7 +106,7 @@ void gm_diff(const gm_manifest *old, const gm_manifest *cur, size_t *added, size
 
 typedef struct gm_sess gm_sess;
 
-int gm_listen(void);
+int gm_listen(uint16_t port);
 gm_sess *gm_connect(const char *ip, uint16_t port);
 gm_sess *gm_serve(int fd);
 const char *gm_sess_peer_name(gm_sess *s);

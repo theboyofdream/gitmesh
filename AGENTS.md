@@ -16,15 +16,15 @@ C11 + libsodium + LZ4. Single binary. No Git dependency, no server, no GUI.
 ```
 src/common/gitmesh.h      shared types/constants
 src/util.c                helpers, hex, file IO
-src/ident.c              device keypair (~/.gitmesh/identity), known-peers TOFU
-src/disco.c              UDP broadcast announce/probe (discovery)
-src/index.c              project scan, BLAKE2b hashes, manifest diff (.gitmesh/index)
-src/proto.c              TCP session: X25519 kx, secretstream enc, mutual Ed25519 auth
-src/sync.c               push/pull flows + server-side session handler
-src/main.c               CLI dispatch
-src/platform/            platform dispatch header
+src/identity.c            device keypair (~/.gitmesh/identity), known-peers TOFU, user/device names
+src/discovery.c           UDP broadcast announce/probe (discovery)
+src/index.c               project scan, BLAKE2b hashes, manifest diff (.gitmesh/index)
+src/proto.c               TCP session: X25519 kx, secretstream enc, mutual Ed25519 auth
+src/sync.c                push/pull flows + server-side session handler
+src/main.c                CLI dispatch
+src/platform.h            platform dispatch header
 src/platforms/{darwin,linux,win32}/  per-OS shims (mtime, sockets)
-docs/                    PRD, CHECKLIST, JOURNEY, CHANGELOG (keep updated)
+docs/                     PRD, CHECKLIST, JOURNEY, CHANGELOG (keep updated)
 ```
 
 ## Build / test
@@ -42,3 +42,7 @@ macOS: `brew install libsodium lz4`. Link flags live in the Makefile; don't add 
   record decisions in docs/JOURNEY.md.
 - Security issues (auth bypass, path traversal, unvalidated lengths) = drop caveman style,
   explain clearly, fix first.
+- Update docs:
+  - append [docs/CHANGELOG.md](docs/CHANGELOG.md)
+  - append [docs/CHECKLIST.md](docs/CHECKLIST.md)
+  - append [docs/JOURNEY.md](docs/JOURNEY.md)
