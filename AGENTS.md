@@ -14,8 +14,8 @@ C11 + libsodium + LZ4. Single binary. No Git dependency, no server, no GUI.
 
 ## Layout
 ```
-src/gitmesh.h            shared types/constants
-src/util.c               helpers, hex, file IO
+src/common/gitmesh.h      shared types/constants
+src/util.c                helpers, hex, file IO
 src/ident.c              device keypair (~/.gitmesh/identity), known-peers TOFU
 src/disco.c              UDP broadcast announce/probe (discovery)
 src/index.c              project scan, BLAKE2b hashes, manifest diff (.gitmesh/index)

@@ -82,6 +82,8 @@ int gm_disco_resolve(const gm_ident *id, const char *name, char *ip, uint16_t *p
 
 void gm_manifest_free(gm_manifest *m);
 void gm_manifest_sort(gm_manifest *m);
+gm_entry *gm_manifest_find(const gm_manifest *m, const char *path);
+void gm_manifest_push(gm_manifest *m, const gm_entry *e);
 int gm_index_load(const char *root, gm_manifest *m);
 int gm_index_save(const char *root, const gm_manifest *m);
 int gm_scan(const char *root, const gm_manifest *old, gm_manifest *out);

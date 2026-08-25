@@ -28,12 +28,16 @@ void gm_manifest_free(gm_manifest *m) {
     m->n = m->cap = 0;
 }
 
-static gm_entry *manifest_push(gm_manifest *m) {
+static gm_entry *manifest_push_entry(gm_manifest *m) {
     if (m->n == m->cap) {
         m->cap = m->cap ? m->cap * 2 : 64;
         m->v = gm_xrealloc(m->v, m->cap * sizeof *m->v);
     }
     return &m->v[m->n++];
+}
+
+void gm_manifest_push(gm_manifest *m, const gm_entry *e) {
+    *manifest_push_entry(m) = *e;
 }
 
 static int cmp_entry(const void *a, const void *b) {
@@ -44,7 +48,7 @@ void gm_manifest_sort(gm_manifest *m) {
     qsort(m->v, m->n, sizeof *m->v, cmp_entry);
 }
 
-static gm_entry *find_entry(const gm_manifest *m, const char *path) {
+gm_entry *gm_manifest_find(const gm_manifest *m, const char *path) {
     size_t lo = 0, hi = m->n;
     while (lo < hi) {
         size_t mid = lo + (hi - lo) / 2;
@@ -95,7 +99,7 @@ static void scan_dir(const char *root, const char *rel, const gm_manifest *old, 
         }
         if (!S_ISREG(st.st_mode)) continue;
 
-        gm_entry *old_e = find_entry(old, crel);
+        gm_entry *old_e = gm_manifest_find(old, crel);
         gm_entry e = {0};
         e.path = gm_xstrdup(crel);
         e.size = (uint64_t)st.st_size;
@@ -106,7 +110,7 @@ static void scan_dir(const char *root, const char *rel, const gm_manifest *old, 
             free(e.path);
             continue;
         }
-        *manifest_push(out) = e;
+        gm_manifest_push(out, &e);
     }
     closedir(d);
 }
@@ -134,7 +138,7 @@ int gm_index_load(const char *root, gm_manifest *m) {
         memcpy(&plen, data + off, 2);
         off += 2;
         if (off + (size_t)plen + crypto_generichash_BYTES + 8 + 8 > n) break;
-        gm_entry *e = manifest_push(m);
+        gm_entry *e = manifest_push_entry(m);
         e->path = gm_xmalloc((size_t)plen + 1);
         memcpy(e->path, data + off, plen);
         e->path[plen] = 0;
