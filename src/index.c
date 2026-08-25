@@ -66,10 +66,16 @@ static int hash_file(const char *full, uint8_t out[crypto_generichash_BYTES]) {
     crypto_generichash_state st;
     crypto_generichash_init(&st, NULL, 0, crypto_generichash_BYTES);
     static _Thread_local uint8_t buf[GM_CHUNK];
-    size_t r;
-    while ((r = fread(buf, 1, sizeof buf, f)) > 0)
+    for (;;) {
+        size_t r = 0;
+        if (!feof(f) && !ferror(f))
+            r = fread(buf, 1, sizeof buf, f);
+        if (r == 0) break;
         crypto_generichash_update(&st, buf, r);
+    }
+    int bad = ferror(f) != 0;
     fclose(f);
+    if (bad) return -1;
     crypto_generichash_final(&st, out, crypto_generichash_BYTES);
     return 0;
 }
