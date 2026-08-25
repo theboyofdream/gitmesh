@@ -31,7 +31,7 @@ compile_commands.json: Makefile
 	@printf '[\n' >> $@
 	@sep=
 	@for f in $(SRC); do \
-	  printf '%s  {"directory": "%s", "command": "%s %s -c %s/%s", "file": "%s"}\n' \
+	  printf '%s  {"directory": "%s", "command": "%s %s -c \\"%s/%s\\"", "file": "%s"}\n' \
 	    "$$sep" "$$(pwd)" "$(CC)" "$(CFLAGS)" "$$(pwd)" "$$f" "$$f" >> $@; \
 	  sep=,; \
 	done
