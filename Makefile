@@ -26,7 +26,18 @@ gitmesh: $(SRC) src/common/gitmesh.h src/platform.h
 test: gitmesh
 	sh tests/run.sh
 
+compile_commands.json: Makefile
+	@rm -f $@
+	@printf '[\n' >> $@
+	@sep=
+	@for f in $(SRC); do \
+	  printf '%s  {"directory": "%s", "command": "%s %s -c %s/%s", "file": "%s"}\n' \
+	    "$$sep" "$$(pwd)" "$(CC)" "$(CFLAGS)" "$$(pwd)" "$$f" "$$f" >> $@; \
+	  sep=,; \
+	done
+	@printf ']\n' >> $@
+
 clean:
 	rm -f gitmesh
 
-.PHONY: test clean
+.PHONY: test clean compile_commands.json
