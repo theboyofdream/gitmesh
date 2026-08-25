@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <time.h>
 
 #ifndef MSG_NOSIGNAL
@@ -83,7 +84,7 @@ int gm_recv_msg(gm_sess *s, uint8_t *type, uint8_t **payload, uint32_t *len) {
     uint8_t *pt = gm_xmalloc(netlen);
     unsigned long long plen = 0;
     int rc = crypto_secretstream_xchacha20poly1305_pull(
-        &s->rx_st, pt, &plen, NULL, ct, netlen, NULL, 0, 0);
+        &s->rx_st, pt, &plen, NULL, ct, netlen, NULL, 0);
     free(ct);
     if (rc != 0 || plen < 5) {
         free(pt);
@@ -109,7 +110,8 @@ int gm_recv_msg(gm_sess *s, uint8_t *type, uint8_t **payload, uint32_t *len) {
 
 static int send_hello(gm_sess *s, const gm_ident *id) {
     uint8_t h[2 + GM_NAME_MAX + crypto_sign_PUBLICKEYBYTES + crypto_kx_PUBLICKEYBYTES];
-    memcpy(h, &GM_PROTO_VERSION, 2);
+    uint16_t ver = (uint16_t)GM_PROTO_VERSION;
+    memcpy(h, &ver, 2);
     memset(h + 2, 0, GM_NAME_MAX);
     snprintf((char *)h + 2, GM_NAME_MAX, "%s", id->name);
     memcpy(h + 2 + GM_NAME_MAX, id->sign_pk, crypto_sign_PUBLICKEYBYTES);
@@ -163,7 +165,9 @@ gm_sess *gm_connect(const char *ip, uint16_t port) {
     uint8_t peer_kx_pk[crypto_kx_PUBLICKEYBYTES];
     if (send_hello(s, &id) != 0 || recv_hello(s, peer_kx_pk) != 0)
         gm_die("handshake: protocol mismatch");
-    crypto_kx_client_session_keys(s->rx_key, s->tx_key, id.kx_pk, id.kx_sk, peer_kx_pk);
+    if (crypto_kx_client_session_keys(s->rx_key, s->tx_key, id.kx_pk, id.kx_sk,
+                                      peer_kx_pk) != 0)
+        gm_die("key exchange failed");
     if (start_crypto(s) != 0) gm_die("crypto setup failed");
 
     uint8_t *chal = NULL;
@@ -222,7 +226,11 @@ gm_sess *gm_serve(int fd) {
         gm_close(s);
         return NULL;
     }
-    crypto_kx_server_session_keys(s->rx_key, s->tx_key, id.kx_pk, id.kx_sk, peer_kx_pk);
+    if (crypto_kx_server_session_keys(s->rx_key, s->tx_key, id.kx_pk, id.kx_sk,
+                                      peer_kx_pk) != 0) {
+        gm_close(s);
+        return NULL;
+    }
     if (start_crypto(s) != 0) {
         gm_close(s);
         return NULL;

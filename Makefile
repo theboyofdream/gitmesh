@@ -1,6 +1,11 @@
 CC      ?= cc
-CFLAGS  := -std=c11 -O2 -Wall -Wextra -D_GNU_SOURCE
-LDLIBS  := -lsodium -llz4
+BREW    := $(shell command -v brew >/dev/null 2>&1 && brew --prefix)
+ifneq ($(BREW),)
+  CFLAGS  += -I$(BREW)/include
+  LDFLAGS += -L$(BREW)/lib
+endif
+CFLAGS  := -std=c11 -O2 -Wall -Wextra -D_GNU_SOURCE $(CFLAGS)
+LDLIBS  := $(LDFLAGS) -lsodium -llz4
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 ifeq ($(UNAME_S),Darwin)
@@ -15,7 +20,7 @@ CFLAGS += -Isrc/common -Isrc/platform -Isrc/platforms/$(PLATFORM)
 
 SRC := src/util.c src/ident.c src/disco.c src/index.c src/proto.c src/sync.c src/main.c
 
-gitmesh: $(SRC) src/gitmesh.h
+gitmesh: $(SRC) src/common/gitmesh.h src/platform/platform.h
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDLIBS)
 
 test: gitmesh
