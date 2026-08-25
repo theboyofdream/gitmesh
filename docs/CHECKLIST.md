@@ -11,11 +11,13 @@
 - [ ] Windows build verified (code has winsock compat path; tested on macOS/Linux)
 
 ## CLI
-- [x] `gitmesh peers`
-- [x] `gitmesh share`
+- [x] `gitmesh peers` (user@device display, direct ip:port target)
+- [x] `gitmesh share` (GITMESH_TCP_PORT env override)
 - [x] `gitmesh status`
 - [x] `gitmesh send <peer>`
 - [x] `gitmesh receive <peer>`
+- [x] `gitmesh name [new]` / `device [new]` (user vs device split)
+- [x] `gitmesh export` / `import <hex>` (seed backup/restore)
 - [x] Confirmation prompt before transfer ([y/N])
 
 ## Change detection
@@ -30,9 +32,15 @@
 - [x] Authenticated peer identity (Ed25519 challenge-response, mutual, TOFU pinning)
 - [x] Incremental transfer (WANT list of needed files)
 - [x] Content hashing verification per file
-- [x] LZ4 compression per file when beneficial
+- [x] LZ4 compression per file when beneficial (uniform 1+4+len chunk header)
 - [x] Transfer progress output
 - [x] Interrupted-transfer recovery (temp file + atomic rename, conflict guard)
+
+## Identity
+- [x] Separate user name (~/.gitmesh/user) vs device name (~/.gitmesh/device, hostname default)
+- [x] Display `user@device` in announce + HELLO
+- [x] Legacy ~/.gitmesh/name migrates to user
+- [x] Seed export/import for multi-device copy
 
 ## Non-goals respected
 - [x] No Git integration / remotes / wrappers
