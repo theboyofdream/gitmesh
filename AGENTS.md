@@ -7,42 +7,16 @@ Tiny standalone decentralized LAN tool: discover peer → see changes → send/r
 C11 + libsodium + LZ4. Single binary. No Git dependency, no server, no GUI.
 
 ## Hard rules
-- NEVER call git, add Git remotes, or wrap Git semantics. GitMesh has its own index.
-- No central server, cloud, accounts, continuous sync, DB, Electron. Reject scope creep.
-- Keep it aggressively small and modular. One concern per file under `src/`.
-- No comments in code unless asked; code should be self-explanatory.
+- Git is for repo workflow only; GitMesh must not depend on or implement Git.
+- No central server, cloud, accounts, continuous sync, DB, or Electron. Reject scope creep.
+- Keep it aggressively small and modular.
 
-## Layout
-```
-src/common/gitmesh.h      shared types/constants
-src/util.c                helpers, hex, file IO
-src/identity.c            device keypair (~/.gitmesh/identity), known-peers TOFU, user/device names
-src/discovery.c           UDP broadcast announce/probe (discovery)
-src/index.c               project scan, BLAKE2b hashes, manifest diff (.gitmesh/index)
-src/proto.c               TCP session: X25519 kx, secretstream enc, mutual Ed25519 auth
-src/sync.c                push/pull flows + server-side session handler
-src/main.c                CLI dispatch
-src/platform.h            platform dispatch header
-src/platforms/{darwin,linux,win32}/  per-OS shims (mtime, sockets)
-docs/                     PRD, CHECKLIST, JOURNEY, CHANGELOG (keep updated)
-```
+## Working rules
+- Keep changes focused and minimal.
+- Follow `docs/CONVENTIONS.md` for naming, file layout, crypto, and wire-protocol rules; `docs/SECURITY.md` for security handling.
+- Update docs when behavior changes (see below).
 
-## Build / test
-```
-make            # build ./gitmesh
-make test       # end-to-end loopback test (two fake HOMEs)
-```
-macOS: `brew install libsodium lz4`. Link flags live in the Makefile; don't add deps casually.
-
-## Conventions
-- Wire protocol changes → bump `PROTO_VERSION` in gitmesh.h and note in docs/CHANGELOG.md.
-- Crypto: only libsodium high-level APIs (`crypto_kx`, `crypto_secretstream_*`,
-  `crypto_sign_*`, `crypto_generichash`). Never hand-roll primitives.
-- Any change to behavior/CLI: update docs/CHECKLIST.md + docs/CHANGELOG.md;
-  record decisions in docs/JOURNEY.md.
-- Security issues (auth bypass, path traversal, unvalidated lengths) = drop caveman style,
-  explain clearly, fix first.
-- Update docs:
-  - append [docs/CHANGELOG.md](docs/CHANGELOG.md)
-  - append [docs/CHECKLIST.md](docs/CHECKLIST.md)
-  - append [docs/JOURNEY.md](docs/JOURNEY.md)
+## Docs
+- Current (edit in place): `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT.md`, `docs/CONVENTIONS.md`
+- Append-only history (never rewrite entries, only append): `docs/CHECKLIST.md`, `docs/JOURNEY.md`, `docs/CHANGELOG.md`
+- Layout and build details live in `docs/ARCHITECTURE.md` and `docs/DEVELOPMENT.md`, not here.

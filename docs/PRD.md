@@ -43,23 +43,27 @@ Scanning...
 Send to macbook? [y/N]
 ```
 
+Additional identity commands: `name [new]`, `device [new]`, `export`, `import <hex>` (see `ARCHITECTURE.md`).
+
+Targets resolve by `user`, `device`, `user@device`, or direct `ip:port`.
+
 ## Change detection
 - GitMesh maintains its own lightweight local index (`.gitmesh/index` in the project).
-- Never calls Git. Uses file metadata (size/mtime) + content hashing (BLAKE2b-256).
+- Never calls Git. Uses file metadata (size/mtime) + content hashing (BLAKE2b-256 via `crypto_generichash`).
 - Classifies: added / modified / deleted files.
 - Only changed content is transferred.
 
 ## Discovery
 - Zero-config LAN discovery.
-- MVP: UDP broadcast announce/probe (lightweight, no deps).
+- MVP: UDP broadcast announce/probe on port 42997.
 - mDNS optional later upgrade.
 - Peers appear automatically; no IPs entered by users.
 
 ## Transfer
-- Peer-to-peer only, direct TCP between machines.
-- Encrypted connection (X25519 key exchange + XChaCha20-Poly1305 streams).
+- Peer-to-peer only, direct TCP between machines (port 42998).
+- Encrypted connection (X25519 key exchange + XChaCha20-Poly1305 secretstream).
 - Authenticated peer identity (Ed25519 signatures, TOFU pinning).
-- Incremental transfer (only missing/changed files).
+- Incremental transfer (only missing/changed files via WANT list).
 - Content hashing verifies every file end-to-end.
 - Compression (LZ4 per chunk when it helps).
 - Transfer progress output.
@@ -74,7 +78,7 @@ Send to macbook? [y/N]
 - Electron/GUI
 
 ## Tech choices
-- Language: C11 (user preference over Rust), single small binary.
+- Language: C11 (single small binary).
 - Crypto/hashing: libsodium (Ed25519, X25519, secretstream, BLAKE2b).
 - Compression: LZ4.
 - Build: plain Makefile.
